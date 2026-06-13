@@ -1,0 +1,29 @@
+name: Test tarball scan
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Pull and save image as tarball
+        run: |
+          docker pull alpine:3.18
+          docker save alpine:3.18 -o /tmp/alpine.tar
+      - id: scan
+        uses: .
+        with:
+          tarball: /tmp/alpine.tar
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          severity_threshold: HIGH
+          ignore_unfixed: 'true'
+      - name: Assert json output is set
+        env:
+          JSON_OUT: ${{ steps.scan.outputs.json }}
+        run: |
+          echo "json output: $JSON_OUT"
+          if [ -z "$JSON_OUT" ]; then
+            echo "FAIL: expected json output to be non-empty"
+            exit 1
+          fi
+          echo "PASS"

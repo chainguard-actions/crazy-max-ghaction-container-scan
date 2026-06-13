@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "sourceMap": true,
+    "newLine": "lf",
+    "outDir": "./lib",
+    "rootDir": "./src",
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitAny": false,
+    "resolveJsonModule": true,
+    "useUnknownInCatchVariables": false,
+  },
+  "exclude": [
+    "./__tests__/**/*",
+    "./vitest.config.ts",
+    "node_modules"
+  ]
+}

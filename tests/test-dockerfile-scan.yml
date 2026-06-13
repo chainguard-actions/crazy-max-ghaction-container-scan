@@ -1,0 +1,31 @@
+name: Test dockerfile scan
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Create Dockerfile fixture
+        run: |
+          cat > /tmp/Dockerfile <<'EOF'
+          FROM alpine:3.18
+          RUN echo "hello"
+          EOF
+      - id: scan
+        uses: .
+        with:
+          image: alpine:3.18
+          dockerfile: /tmp/Dockerfile
+          severity: HIGH,CRITICAL
+          ignore_unfixed: 'true'
+      - name: Assert json output is set
+        env:
+          JSON_OUT: ${{ steps.scan.outputs.json }}
+        run: |
+          echo "json output: $JSON_OUT"
+          if [ -z "$JSON_OUT" ]; then
+            echo "FAIL: expected json output to be non-empty"
+            exit 1
+          fi
+          echo "PASS"
