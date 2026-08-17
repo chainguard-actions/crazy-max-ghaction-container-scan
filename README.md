@@ -9,6 +9,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
 | v4.0.0 | [`v4.0.0`](https://github.com/chainguard-actions/crazy-max-ghaction-container-scan/tree/v4.0.0) | [`a0a3900`](https://github.com/crazy-max/ghaction-container-scan/commit/a0a3900b79d158c85ccf034e5368fae620a9233a) |
+| v4.1.0 | [`v4.1.0`](https://github.com/chainguard-actions/crazy-max-ghaction-container-scan/tree/v4.1.0) | [`ffcba8d`](https://github.com/crazy-max/ghaction-container-scan/commit/ffcba8deb5cb3531954cbedbbcd0179d79edf510) |
 
 ## Privacy
 
