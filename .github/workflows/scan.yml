@@ -1,0 +1,36 @@
+name: scan
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: 'Image to scan'
+        required: true
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      -
+        name: Scan for vulnerabilities
+        id: scan
+        uses: ./
+        with:
+          image: ${{ github.event.inputs.image }}
+          annotations: true
+      -
+        name: JSON result
+        env:
+          SCAN_JSON: ${{ steps.scan.outputs.json }}
+        run: cat "$SCAN_JSON"

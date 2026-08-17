@@ -1,0 +1,213 @@
+name: ci
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: '0 10 * * *'
+  push:
+    branches:
+      - 'master'
+      - 'releases/v*'
+    tags:
+      - 'v*'
+  pull_request:
+    paths-ignore:
+      - '.github/trivy-releases.json'
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - alpine:3.9
+          - alpine:latest
+          - moby/buildkit:master
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      -
+        name: Scan for vulnerabilities
+        id: scan
+        uses: ./
+        with:
+          image: ${{ matrix.image }}
+      -
+        name: JSON result
+        env:
+          SCAN_JSON: ${{ steps.scan.outputs.json }}
+        run: cat "$SCAN_JSON"
+
+  tarball:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      -
+        name: Build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./test
+          outputs: type=docker,dest=/tmp/image.tar
+          tags: name/app:latest
+          provenance: false
+      -
+        name: Scan for vulnerabilities
+        id: scan
+        uses: ./
+        with:
+          tarball: /tmp/image.tar
+      -
+        name: JSON result
+        env:
+          SCAN_JSON: ${{ steps.scan.outputs.json }}
+        run: cat "$SCAN_JSON"
+
+  sarif:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      -
+        name: Build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./test
+          outputs: type=docker,dest=/tmp/image.tar
+          tags: name/app:latest
+          provenance: false
+      -
+        name: Scan for vulnerabilities
+        id: scan
+        uses: ./
+        with:
+          tarball: /tmp/image.tar
+          dockerfile: ./test/Dockerfile
+      -
+        name: SARIF result
+        env:
+          SCAN_SARIF: ${{ steps.scan.outputs.sarif }}
+        run: cat "$SCAN_SARIF"
+
+  annotations:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - alpine:3.9
+          - alpine:latest
+          - moby/buildkit:master
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      -
+        name: Scan for vulnerabilities
+        uses: ./
+        with:
+          image: ${{ matrix.image }}
+          annotations: true
+
+  ignore_unfixed:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      -
+        name: Scan for vulnerabilities
+        uses: ./
+        with:
+          image: alpine:3.9
+          ignore_unfixed: true
+
+  threshold:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - alpine:3.9
+          - alpine:3.10
+          - alpine:latest
+          - moby/buildkit:master
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      -
+        name: Scan for vulnerabilities
+        continue-on-error: true
+        uses: ./
+        with:
+          image: ${{ matrix.image }}
+          severity_threshold: HIGH
+
+  build-scan-push:
+    runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+    env:
+      REPO_SLUG: localhost:5000/name/app
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      -
+        name: Docker meta
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REPO_SLUG }}
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        with:
+          driver-opts: network=host
+      -
+        name: Build and load
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./test
+          file: ./test/Dockerfile
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+      -
+        name: Scan for vulnerabilities
+        uses: ./
+        with:
+          image: ${{ env.REPO_SLUG }}:${{ steps.meta.outputs.version }}
+          dockerfile: ./test/Dockerfile
+      -
+        name: Build multi-platform and push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./test
+          file: ./test/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
