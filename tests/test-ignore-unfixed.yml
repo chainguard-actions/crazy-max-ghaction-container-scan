@@ -1,0 +1,53 @@
+name: Test ignore unfixed vulnerabilities
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: scan
+        uses: .
+        with:
+          image: alpine:3.18
+          severity: CRITICAL,HIGH
+          ignore_unfixed: 'true'
+      - name: Assert JSON output is set
+        env:
+          JSON_OUT: ${{ steps.scan.outputs.json }}
+        run: |
+          echo "json output: $JSON_OUT"
+          if [ -z "$JSON_OUT" ]; then
+            echo "FAIL: expected json output to be non-empty"
+            exit 1
+          fi
+          echo "PASS: json output is set"
+      - name: Assert JSON file is valid and contains expected structure
+        env:
+          JSON_OUT: ${{ steps.scan.outputs.json }}
+        run: |
+          echo "Checking JSON structure at: $JSON_OUT"
+          if [ ! -f "$JSON_OUT" ]; then
+            echo "FAIL: JSON output file does not exist"
+            exit 1
+          fi
+          python3 -c "
+          import json, sys
+          data = json.load(open('$JSON_OUT'))
+          print('JSON keys:', list(data.keys()))
+          # Trivy JSON output should have SchemaVersion or Results
+          if 'SchemaVersion' not in data and 'Results' not in data:
+              print('FAIL: unexpected JSON structure')
+              sys.exit(1)
+          print('PASS: JSON structure is valid')
+          "
+      - name: Assert SARIF output is empty (no dockerfile provided)
+        env:
+          SARIF_OUT: ${{ steps.scan.outputs.sarif }}
+        run: |
+          echo "sarif output: '$SARIF_OUT'"
+          if [ -n "$SARIF_OUT" ]; then
+            echo "FAIL: expected sarif output to be empty when no dockerfile is provided"
+            exit 1
+          fi
+          echo "PASS: sarif output is empty as expected (no dockerfile provided)"

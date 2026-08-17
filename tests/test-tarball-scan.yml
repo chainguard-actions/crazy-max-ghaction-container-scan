@@ -1,0 +1,47 @@
+name: Test tarball input scan
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Pull and save image as tarball
+        run: |
+          docker pull alpine:3.18
+          docker save alpine:3.18 -o /tmp/alpine.tar
+
+      - id: action
+        uses: .
+        with:
+          tarball: /tmp/alpine.tar
+          severity: HIGH,CRITICAL
+          ignore_unfixed: 'true'
+          annotations: 'false'
+
+      - name: Assert json output is set
+        env:
+          JSON: ${{ steps.action.outputs.json }}
+        run: |
+          echo "json: $JSON"
+          if [ -z "$JSON" ]; then
+            echo "FAIL: expected json output to be set for tarball scan"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert json file exists and is valid
+        env:
+          JSON: ${{ steps.action.outputs.json }}
+        run: |
+          echo "json path: $JSON"
+          if [ ! -f "$JSON" ]; then
+            echo "FAIL: json file does not exist at $JSON"
+            exit 1
+          fi
+          if ! python3 -c "import json, sys; json.load(open('$JSON'))" 2>/dev/null; then
+            echo "FAIL: json output is not valid JSON"
+            exit 1
+          fi
+          echo "PASS"

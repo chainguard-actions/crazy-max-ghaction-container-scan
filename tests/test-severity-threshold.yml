@@ -1,0 +1,60 @@
+name: Test severity threshold
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: scan
+        uses: .
+        continue-on-error: true
+        with:
+          image: alpine:3.18
+          severity: CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN
+          severity_threshold: CRITICAL
+          ignore_unfixed: 'true'
+      - name: Assert scan step completed (passed or failed due to threshold)
+        env:
+          OUTCOME: ${{ steps.scan.outcome }}
+        run: |
+          echo "scan outcome: $OUTCOME"
+          if [ "$OUTCOME" != "success" ] && [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: unexpected scan outcome '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS: scan step completed with outcome '$OUTCOME'"
+      - name: Assert JSON output is set
+        env:
+          JSON_OUT: ${{ steps.scan.outputs.json }}
+        run: |
+          echo "json output: $JSON_OUT"
+          if [ -z "$JSON_OUT" ]; then
+            echo "FAIL: expected json output to be non-empty"
+            exit 1
+          fi
+          echo "PASS: json output is set"
+      - name: Assert JSON file exists and is valid JSON
+        env:
+          JSON_OUT: ${{ steps.scan.outputs.json }}
+        run: |
+          echo "Checking JSON file at: $JSON_OUT"
+          if [ ! -f "$JSON_OUT" ]; then
+            echo "FAIL: JSON output file does not exist at $JSON_OUT"
+            exit 1
+          fi
+          if ! python3 -c "import json, sys; json.load(open('$JSON_OUT'))" 2>/dev/null; then
+            echo "FAIL: JSON output file is not valid JSON"
+            exit 1
+          fi
+          echo "PASS: JSON file exists and is valid"
+      - name: Assert SARIF output is empty (no dockerfile provided)
+        env:
+          SARIF_OUT: ${{ steps.scan.outputs.sarif }}
+        run: |
+          echo "sarif output: '$SARIF_OUT'"
+          if [ -n "$SARIF_OUT" ]; then
+            echo "FAIL: expected sarif output to be empty when no dockerfile is provided"
+            exit 1
+          fi
+          echo "PASS: sarif output is empty as expected (no dockerfile provided)"

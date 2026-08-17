@@ -1,0 +1,45 @@
+name: Test dockerfile input for SARIF report
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a simple Dockerfile for testing
+        run: |
+          cat > /tmp/test.Dockerfile << 'EOF'
+          FROM alpine:3.18
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          image: alpine:3.18
+          dockerfile: /tmp/test.Dockerfile
+          severity: HIGH,CRITICAL
+          ignore_unfixed: 'true'
+          annotations: 'false'
+
+      - name: Assert sarif output is set
+        env:
+          SARIF: ${{ steps.action.outputs.sarif }}
+        run: |
+          echo "sarif: $SARIF"
+          if [ -z "$SARIF" ]; then
+            echo "FAIL: expected sarif output to be set when dockerfile is provided"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert sarif file exists
+        env:
+          SARIF: ${{ steps.action.outputs.sarif }}
+        run: |
+          echo "sarif path: $SARIF"
+          if [ ! -f "$SARIF" ]; then
+            echo "FAIL: sarif file does not exist at $SARIF"
+            exit 1
+          fi
+          echo "PASS"
